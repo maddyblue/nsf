@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mjibson/mog/codec/nsf/cpu6502"
+	"github.com/mjibson/nsf/cpu6502"
 )
 
 func loadNES(fname string) *NSF {

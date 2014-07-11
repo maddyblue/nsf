@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/mjibson/mog/codec"
-	"github.com/mjibson/mog/codec/nsf/cpu6502"
+	"github.com/mjibson/nsf/cpu6502"
 )
 
 const (
