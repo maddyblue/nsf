@@ -2,12 +2,10 @@ package nsf
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"time"
 
-	"github.com/mjibson/mog/codec"
 	"github.com/mjibson/nsf/cpu6502"
 )
 
@@ -22,10 +20,6 @@ var (
 	DefaultSampleRate int64 = 44100
 	ErrUnrecognized         = errors.New("nsf: unrecognized format")
 )
-
-func init() {
-	codec.RegisterCodec("NSF", "NESM\u001a", ReadNSFSongs)
-}
 
 const (
 	NSF_HEADER_LEN = 0x80
@@ -45,47 +39,6 @@ const (
 	NSF_EXTRA      = 0x7b
 	NSF_ZERO       = 0x7c
 )
-
-func ReadNSFSongs(r io.Reader) ([]codec.Song, error) {
-	n, err := ReadNSF(r)
-	if err != nil {
-		return nil, err
-	}
-	songs := make([]codec.Song, n.Songs)
-	for i := range songs {
-		songs[i] = &NSFSong{n, i + 1}
-	}
-	return songs, nil
-}
-
-type NSFSong struct {
-	*NSF
-	Index int
-}
-
-func (n *NSFSong) Play(samples int) []float32 {
-	if n.playing != n.Index {
-		n.Init(n.Index)
-		n.playing = n.Index
-	}
-	return n.NSF.Play(samples)
-}
-
-func (n *NSFSong) Close() {
-	// todo: implement
-}
-
-func (n *NSFSong) Info() codec.SongInfo {
-	return codec.SongInfo{
-		Time:       time.Minute * 2,
-		Artist:     n.Artist,
-		Album:      n.Song,
-		Track:      n.Index,
-		Title:      fmt.Sprintf("%s:%d", n.Song, n.Index),
-		SampleRate: int(n.SampleRate),
-		Channels:   1,
-	}
-}
 
 func ReadNSF(r io.Reader) (n *NSF, err error) {
 	n = New()
@@ -154,7 +107,6 @@ type NSF struct {
 	samples     []float32
 	prevs       [4]float32
 	pi          int // prevs index
-	playing     int // 1-based index of currently-playing song
 }
 
 func New() *NSF {
