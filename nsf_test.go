@@ -7,7 +7,7 @@ import (
 	"github.com/mjibson/mog/output"
 )
 
-func TestNsf(t *testing.T) {
+func _TestNsf(t *testing.T) {
 	f, err := os.Open("mm3.nsf")
 	if err != nil {
 		t.Fatal(err)

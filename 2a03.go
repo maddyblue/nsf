@@ -1,9 +1,9 @@
 package nsf
 
-type Apu struct {
-	S1, S2 Square
-	Triangle
-	Noise
+type apu struct {
+	S1, S2 square
+	triangle
+	noise
 
 	Odd        bool
 	FC         byte
@@ -12,48 +12,48 @@ type Apu struct {
 	Interrupt  bool
 }
 
-type Noise struct {
-	Envelope
-	Timer
-	Length
+type noise struct {
+	envelope
+	timer
+	length
 	Short bool
 	Shift uint16
 
 	Enable bool
 }
 
-type Triangle struct {
-	Linear
-	Timer
-	Length
+type triangle struct {
+	linear
+	timer
+	length
 	SI int // sequence index
 
 	Enable bool
 }
 
-type Linear struct {
+type linear struct {
 	Reload  byte
 	Halt    bool
 	Flag    bool
 	Counter byte
 }
 
-type Square struct {
-	Envelope
-	Timer
-	Length
-	Sweep
-	Duty
+type square struct {
+	envelope
+	timer
+	length
+	sweep
+	duty
 
 	Enable bool
 }
 
-type Duty struct {
+type duty struct {
 	Type    byte
 	Counter byte
 }
 
-type Sweep struct {
+type sweep struct {
 	Shift     byte
 	Negate    bool
 	Period    byte
@@ -63,7 +63,7 @@ type Sweep struct {
 	NegOffset int
 }
 
-type Envelope struct {
+type envelope struct {
 	Volume   byte
 	Divider  byte
 	Counter  byte
@@ -72,18 +72,18 @@ type Envelope struct {
 	Start    bool
 }
 
-type Timer struct {
+type timer struct {
 	Tick   uint16
-	Length uint16
+	length uint16
 }
 
-type Length struct {
+type length struct {
 	Halt    bool
 	Counter byte
 }
 
-func (a *Apu) Init() {
-	a.S1.Sweep.NegOffset = -1
+func (a *apu) Init() {
+	a.S1.sweep.NegOffset = -1
 	for i := uint16(0x4000); i <= 0x400f; i++ {
 		a.Write(i, 0)
 	}
@@ -93,10 +93,10 @@ func (a *Apu) Init() {
 	a.Write(0x4013, 0)
 	a.Write(0x4015, 0xf)
 	a.Write(0x4017, 0)
-	a.Noise.Shift = 1
+	a.noise.Shift = 1
 }
 
-func (a *Apu) Write(v uint16, b byte) {
+func (a *apu) Write(v uint16, b byte) {
 	switch v & 0xff {
 	case 0x00:
 		a.S1.Control1(b)
@@ -115,22 +115,22 @@ func (a *Apu) Write(v uint16, b byte) {
 	case 0x07:
 		a.S2.Control4(b)
 	case 0x08:
-		a.Triangle.Control1(b)
+		a.triangle.Control1(b)
 	case 0x0a:
-		a.Triangle.Control2(b)
+		a.triangle.Control2(b)
 	case 0x0b:
-		a.Triangle.Control3(b)
+		a.triangle.Control3(b)
 	case 0x0c:
-		a.Noise.Control1(b)
+		a.noise.Control1(b)
 	case 0x0e:
-		a.Noise.Control2(b)
+		a.noise.Control2(b)
 	case 0x0f:
-		a.Noise.Control3(b)
+		a.noise.Control3(b)
 	case 0x15:
 		a.S1.Disable(b&0x1 == 0)
 		a.S2.Disable(b&0x2 == 0)
-		a.Triangle.Disable(b&0x4 == 0)
-		a.Noise.Disable(b&0x8 == 0)
+		a.triangle.Disable(b&0x4 == 0)
+		a.noise.Disable(b&0x8 == 0)
 	case 0x17:
 		a.FT = 0
 		if b&0x80 != 0 {
@@ -146,70 +146,70 @@ func (a *Apu) Write(v uint16, b byte) {
 	}
 }
 
-func (n *Noise) Control1(b byte) {
-	n.Envelope.Control(b)
+func (n *noise) Control1(b byte) {
+	n.envelope.Control(b)
 }
 
-func (n *Noise) Control2(b byte) {
-	n.Timer.Length = NoiseLookup[b&0xf]
+func (n *noise) Control2(b byte) {
+	n.timer.length = noiseLookup[b&0xf]
 	n.Short = b&0x8 != 0
 }
 
-func (n *Noise) Control3(b byte) {
-	n.Length.Set(b >> 3)
+func (n *noise) Control3(b byte) {
+	n.length.Set(b >> 3)
 }
 
-func (t *Triangle) Control1(b byte) {
-	t.Linear.Control(b)
-	t.Length.Halt = b&0x80 != 0
+func (t *triangle) Control1(b byte) {
+	t.linear.Control(b)
+	t.length.Halt = b&0x80 != 0
 }
 
-func (l *Linear) Control(b byte) {
+func (l *linear) Control(b byte) {
 	l.Flag = b&0x80 != 0
 	l.Reload = b & 0x7f
 }
 
-func (t *Triangle) Control2(b byte) {
-	t.Timer.Length &= 0xff00
-	t.Timer.Length |= uint16(b)
+func (t *triangle) Control2(b byte) {
+	t.timer.length &= 0xff00
+	t.timer.length |= uint16(b)
 }
 
-func (t *Triangle) Control3(b byte) {
-	t.Timer.Length &= 0xff
-	t.Timer.Length |= uint16(b&0x7) << 8
-	t.Length.Set(b >> 3)
-	t.Linear.Halt = true
+func (t *triangle) Control3(b byte) {
+	t.timer.length &= 0xff
+	t.timer.length |= uint16(b&0x7) << 8
+	t.length.Set(b >> 3)
+	t.linear.Halt = true
 }
 
-func (s *Square) Control1(b byte) {
-	s.Envelope.Control(b)
-	s.Duty.Control(b)
-	s.Length.Halt = b&0x20 != 0
+func (s *square) Control1(b byte) {
+	s.envelope.Control(b)
+	s.duty.Control(b)
+	s.length.Halt = b&0x20 != 0
 }
 
-func (s *Square) Control2(b byte) {
-	s.Sweep.Control(b)
+func (s *square) Control2(b byte) {
+	s.sweep.Control(b)
 }
 
-func (s *Square) Control3(b byte) {
-	s.Timer.Length &= 0xff00
-	s.Timer.Length |= uint16(b)
+func (s *square) Control3(b byte) {
+	s.timer.length &= 0xff00
+	s.timer.length |= uint16(b)
 }
 
-func (s *Square) Control4(b byte) {
-	s.Timer.Length &= 0xff
-	s.Timer.Length |= uint16(b&0x7) << 8
-	s.Length.Set(b >> 3)
+func (s *square) Control4(b byte) {
+	s.timer.length &= 0xff
+	s.timer.length |= uint16(b&0x7) << 8
+	s.length.Set(b >> 3)
 
-	s.Envelope.Start = true
-	s.Duty.Counter = 0
+	s.envelope.Start = true
+	s.duty.Counter = 0
 }
 
-func (d *Duty) Control(b byte) {
+func (d *duty) Control(b byte) {
 	d.Type = b >> 6
 }
 
-func (s *Sweep) Control(b byte) {
+func (s *sweep) Control(b byte) {
 	s.Shift = b & 0x7
 	s.Negate = b&0x8 != 0
 	s.Period = (b >> 4) & 0x7
@@ -217,54 +217,54 @@ func (s *Sweep) Control(b byte) {
 	s.Reset = true
 }
 
-func (e *Envelope) Control(b byte) {
+func (e *envelope) Control(b byte) {
 	e.Volume = b & 0xf
 	e.Constant = b&0x10 != 0
 	e.Loop = b&0x20 != 0
 }
 
-func (l *Length) Set(b byte) {
-	l.Counter = LenLookup[b]
+func (l *length) Set(b byte) {
+	l.Counter = lenLookup[b]
 }
 
-func (l *Length) Enabled() bool {
+func (l *length) Enabled() bool {
 	return l.Counter != 0
 }
 
-func (s *Square) Disable(b bool) {
+func (s *square) Disable(b bool) {
 	s.Enable = !b
 	if b {
-		s.Length.Counter = 0
+		s.length.Counter = 0
 	}
 }
 
-func (t *Triangle) Disable(b bool) {
+func (t *triangle) Disable(b bool) {
 	t.Enable = !b
 	if b {
-		t.Length.Counter = 0
+		t.length.Counter = 0
 	}
 }
 
-func (n *Noise) Disable(b bool) {
+func (n *noise) Disable(b bool) {
 	n.Enable = !b
 	if b {
-		n.Length.Counter = 0
+		n.length.Counter = 0
 	}
 }
 
-func (a *Apu) Read(v uint16) byte {
+func (a *apu) Read(v uint16) byte {
 	var b byte
 	if v == 0x4015 {
-		if a.S1.Length.Counter > 0 {
+		if a.S1.length.Counter > 0 {
 			b |= 0x1
 		}
-		if a.S2.Length.Counter > 0 {
+		if a.S2.length.Counter > 0 {
 			b |= 0x2
 		}
-		if a.Triangle.Length.Counter > 0 {
+		if a.triangle.length.Counter > 0 {
 			b |= 0x4
 		}
-		if a.Noise.Length.Counter > 0 {
+		if a.noise.length.Counter > 0 {
 			b |= 0x8
 		}
 		if a.Interrupt {
@@ -275,7 +275,7 @@ func (a *Apu) Read(v uint16) byte {
 	return b
 }
 
-func (d *Duty) Clock() {
+func (d *duty) Clock() {
 	if d.Counter == 0 {
 		d.Counter = 7
 	} else {
@@ -283,7 +283,7 @@ func (d *Duty) Clock() {
 	}
 }
 
-func (s *Sweep) Clock() (r bool) {
+func (s *sweep) Clock() (r bool) {
 	if s.Divider == 0 {
 		s.Divider = s.Period
 		r = true
@@ -297,7 +297,7 @@ func (s *Sweep) Clock() (r bool) {
 	return
 }
 
-func (e *Envelope) Clock() {
+func (e *envelope) Clock() {
 	if e.Start {
 		e.Start = false
 		e.Counter = 15
@@ -315,23 +315,23 @@ func (e *Envelope) Clock() {
 	}
 }
 
-func (t *Timer) Clock() bool {
+func (t *timer) Clock() bool {
 	if t.Tick == 0 {
-		t.Tick = t.Length
+		t.Tick = t.length
 	} else {
 		t.Tick--
 	}
-	return t.Tick == t.Length
+	return t.Tick == t.length
 }
 
-func (s *Square) Clock() {
-	if s.Timer.Clock() {
-		s.Duty.Clock()
+func (s *square) Clock() {
+	if s.timer.Clock() {
+		s.duty.Clock()
 	}
 }
 
-func (t *Triangle) Clock() {
-	if t.Timer.Clock() && t.Length.Counter > 0 && t.Linear.Counter > 0 {
+func (t *triangle) Clock() {
+	if t.timer.Clock() && t.length.Counter > 0 && t.linear.Counter > 0 {
 		if t.SI == 31 {
 			t.SI = 0
 		} else {
@@ -340,8 +340,8 @@ func (t *Triangle) Clock() {
 	}
 }
 
-func (n *Noise) Clock() {
-	if n.Timer.Clock() {
+func (n *noise) Clock() {
+	if n.timer.Clock() {
 		var feedback uint16
 		if n.Short {
 			feedback = n.Shift & 0x40 << 8
@@ -355,7 +355,7 @@ func (n *Noise) Clock() {
 	}
 }
 
-func (a *Apu) Step() {
+func (a *apu) Step() {
 	if a.Odd {
 		if a.S1.Enable {
 			a.S1.Clock()
@@ -363,39 +363,39 @@ func (a *Apu) Step() {
 		if a.S2.Enable {
 			a.S2.Clock()
 		}
-		if a.Noise.Enable {
-			a.Noise.Clock()
+		if a.noise.Enable {
+			a.noise.Clock()
 		}
 	}
 	a.Odd = !a.Odd
-	if a.Triangle.Enable {
-		a.Triangle.Clock()
+	if a.triangle.Enable {
+		a.triangle.Clock()
 	}
 }
 
-func (a *Apu) FrameStep() {
+func (a *apu) FrameStep() {
 	a.FT++
 	if a.FT == a.FC {
 		a.FT = 0
 	}
 	if a.FT <= 3 {
-		a.S1.Envelope.Clock()
-		a.S2.Envelope.Clock()
-		a.Triangle.Linear.Clock()
-		a.Noise.Envelope.Clock()
+		a.S1.envelope.Clock()
+		a.S2.envelope.Clock()
+		a.triangle.linear.Clock()
+		a.noise.envelope.Clock()
 	}
 	if a.FT == 1 || a.FT == 3 {
 		a.S1.FrameStep()
 		a.S2.FrameStep()
-		a.Triangle.Length.Clock()
-		a.Noise.Length.Clock()
+		a.triangle.length.Clock()
+		a.noise.length.Clock()
 	}
 	if a.FC == 4 && a.FT == 3 && !a.IrqDisable {
 		a.Interrupt = true
 	}
 }
 
-func (l *Linear) Clock() {
+func (l *linear) Clock() {
 	if l.Halt {
 		l.Counter = l.Reload
 	} else if l.Counter != 0 {
@@ -406,82 +406,82 @@ func (l *Linear) Clock() {
 	}
 }
 
-func (s *Square) FrameStep() {
-	s.Length.Clock()
-	if s.Sweep.Clock() && s.Sweep.Enable && s.Sweep.Shift > 0 {
+func (s *square) FrameStep() {
+	s.length.Clock()
+	if s.sweep.Clock() && s.sweep.Enable && s.sweep.Shift > 0 {
 		r := s.SweepResult()
 		if r <= 0x7ff {
-			s.Timer.Tick = r
+			s.timer.Tick = r
 		}
 	}
 }
 
-func (l *Length) Clock() {
+func (l *length) Clock() {
 	if !l.Halt && l.Counter > 0 {
 		l.Counter--
 	}
 }
 
-func (a *Apu) Volume() float32 {
-	p := PulseOut[a.S1.Volume()+a.S2.Volume()]
-	t := TndOut[3*a.Triangle.Volume()+2*a.Noise.Volume()]
+func (a *apu) Volume() float32 {
+	p := pulseOut[a.S1.Volume()+a.S2.Volume()]
+	t := tndOut[3*a.triangle.Volume()+2*a.noise.Volume()]
 	return p + t
 }
 
-func (n *Noise) Volume() uint8 {
-	if n.Enable && n.Length.Counter > 0 && n.Shift&0x1 != 0 {
-		return n.Envelope.Output()
+func (n *noise) Volume() uint8 {
+	if n.Enable && n.length.Counter > 0 && n.Shift&0x1 != 0 {
+		return n.envelope.Output()
 	}
 	return 0
 }
 
-func (t *Triangle) Volume() uint8 {
-	if t.Enable && t.Linear.Counter > 0 && t.Length.Counter > 0 {
-		return TriLookup[t.SI]
+func (t *triangle) Volume() uint8 {
+	if t.Enable && t.linear.Counter > 0 && t.length.Counter > 0 {
+		return triLookup[t.SI]
 	}
 	return 0
 }
 
-func (s *Square) Volume() uint8 {
-	if s.Enable && s.Duty.Enabled() && s.Length.Enabled() && s.Timer.Tick >= 8 && s.SweepResult() <= 0x7ff {
-		return s.Envelope.Output()
+func (s *square) Volume() uint8 {
+	if s.Enable && s.duty.Enabled() && s.length.Enabled() && s.timer.Tick >= 8 && s.SweepResult() <= 0x7ff {
+		return s.envelope.Output()
 	}
 	return 0
 }
 
-func (e *Envelope) Output() byte {
+func (e *envelope) Output() byte {
 	if e.Constant {
 		return e.Volume
 	}
 	return e.Counter
 }
 
-func (s *Square) SweepResult() uint16 {
-	r := int(s.Timer.Tick >> s.Sweep.Shift)
-	if s.Sweep.Negate {
+func (s *square) SweepResult() uint16 {
+	r := int(s.timer.Tick >> s.sweep.Shift)
+	if s.sweep.Negate {
 		r = -r
 	}
-	r += int(s.Timer.Tick)
+	r += int(s.timer.Tick)
 	if r > 0x7ff {
 		r = 0x800
 	}
 	return uint16(r)
 }
 
-func (d *Duty) Enabled() bool {
-	return DutyCycle[d.Type][d.Counter] == 1
+func (d *duty) Enabled() bool {
+	return dutyCycle[d.Type][d.Counter] == 1
 }
 
 var (
-	PulseOut  [31]float32
-	TndOut    [203]float32
-	DutyCycle = [4][8]byte{
+	pulseOut  [31]float32
+	tndOut    [203]float32
+	dutyCycle = [4][8]byte{
 		{0, 1, 0, 0, 0, 0, 0, 0},
 		{0, 1, 1, 0, 0, 0, 0, 0},
 		{0, 1, 1, 1, 1, 0, 0, 0},
 		{1, 0, 0, 1, 1, 1, 1, 1},
 	}
-	LenLookup = [...]byte{
+	lenLookup = [...]byte{
 		0x0a, 0xfe, 0x14, 0x02,
 		0x28, 0x04, 0x50, 0x06,
 		0xa0, 0x08, 0x3c, 0x0a,
@@ -491,7 +491,7 @@ var (
 		0xc0, 0x18, 0x48, 0x1a,
 		0x10, 0x1c, 0x20, 0x1e,
 	}
-	TriLookup = [...]byte{
+	triLookup = [...]byte{
 		0xF, 0xE, 0xD, 0xC,
 		0xB, 0xA, 0x9, 0x8,
 		0x7, 0x6, 0x5, 0x4,
@@ -501,7 +501,7 @@ var (
 		0x8, 0x9, 0xA, 0xB,
 		0xC, 0xD, 0xE, 0xF,
 	}
-	NoiseLookup = [...]uint16{
+	noiseLookup = [...]uint16{
 		0x004, 0x008, 0x010, 0x020,
 		0x040, 0x060, 0x080, 0x0a0,
 		0x0ca, 0x0fe, 0x17c, 0x1fc,
@@ -510,10 +510,10 @@ var (
 )
 
 func init() {
-	for i := range PulseOut {
-		PulseOut[i] = 95.88 / (8128/float32(i) + 100)
+	for i := range pulseOut {
+		pulseOut[i] = 95.88 / (8128/float32(i) + 100)
 	}
-	for i := range TndOut {
-		TndOut[i] = 163.67 / (24329/float32(i) + 100)
+	for i := range tndOut {
+		tndOut[i] = 163.67 / (24329/float32(i) + 100)
 	}
 }

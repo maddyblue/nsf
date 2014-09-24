@@ -22,22 +22,22 @@ var (
 )
 
 const (
-	NSF_HEADER_LEN = 0x80
-	NSF_VERSION    = 0x5
-	NSF_SONGS      = 0x6
-	NSF_START      = 0x7
-	NSF_LOAD       = 0x8
-	NSF_INIT       = 0xa
-	NSF_PLAY       = 0xc
-	NSF_SONG       = 0xe
-	NSF_ARTIST     = 0x2e
-	NSF_COPYRIGHT  = 0x4e
-	NSF_SPEED_NTSC = 0x6e
-	NSF_BANKSWITCH = 0x70
-	NSF_SPEED_PAL  = 0x78
-	NSF_PAL_NTSC   = 0x7a
-	NSF_EXTRA      = 0x7b
-	NSF_ZERO       = 0x7c
+	nsfHEADER_LEN = 0x80
+	nsfVERSION    = 0x5
+	nsfSONGS      = 0x6
+	nsfSTART      = 0x7
+	nsfLOAD       = 0x8
+	nsfINIT       = 0xa
+	nsfPLAY       = 0xc
+	nsfSONG       = 0xe
+	nsfARTIST     = 0x2e
+	nsfCOPYRIGHT  = 0x4e
+	nsfSPEED_NTSC = 0x6e
+	nsfBANKSWITCH = 0x70
+	nsfSPEED_PAL  = 0x78
+	nsfPAL_NTSC   = 0x7a
+	nsfEXTRA      = 0x7b
+	nsfZERO       = 0x7c
 )
 
 func ReadNSF(r io.Reader) (n *NSF, err error) {
@@ -46,34 +46,34 @@ func ReadNSF(r io.Reader) (n *NSF, err error) {
 	if err != nil {
 		return
 	}
-	if len(n.b) < NSF_HEADER_LEN ||
-		string(n.b[0:NSF_VERSION]) != "NESM\u001a" {
+	if len(n.b) < nsfHEADER_LEN ||
+		string(n.b[0:nsfVERSION]) != "NESM\u001a" {
 		return nil, ErrUnrecognized
 	}
-	n.Version = n.b[NSF_VERSION]
-	n.Songs = n.b[NSF_SONGS]
-	n.Start = n.b[NSF_START]
-	n.LoadAddr = bLEtoUint16(n.b[NSF_LOAD:])
-	n.InitAddr = bLEtoUint16(n.b[NSF_INIT:])
-	n.PlayAddr = bLEtoUint16(n.b[NSF_PLAY:])
-	n.Song = bToString(n.b[NSF_SONG:])
-	n.Artist = bToString(n.b[NSF_ARTIST:])
-	n.Copyright = bToString(n.b[NSF_COPYRIGHT:])
-	n.SpeedNTSC = bLEtoUint16(n.b[NSF_SPEED_NTSC:])
-	copy(n.Bankswitch[:], n.b[NSF_BANKSWITCH:NSF_SPEED_PAL])
-	n.SpeedPAL = bLEtoUint16(n.b[NSF_SPEED_PAL:])
-	n.PALNTSC = n.b[NSF_PAL_NTSC]
-	n.Extra = n.b[NSF_EXTRA]
-	n.Data = n.b[NSF_HEADER_LEN:]
+	n.Version = n.b[nsfVERSION]
+	n.Songs = n.b[nsfSONGS]
+	n.Start = n.b[nsfSTART]
+	n.LoadAddr = bLEtoUint16(n.b[nsfLOAD:])
+	n.InitAddr = bLEtoUint16(n.b[nsfINIT:])
+	n.PlayAddr = bLEtoUint16(n.b[nsfPLAY:])
+	n.Song = bToString(n.b[nsfSONG:])
+	n.Artist = bToString(n.b[nsfARTIST:])
+	n.Copyright = bToString(n.b[nsfCOPYRIGHT:])
+	n.SpeedNTSC = bLEtoUint16(n.b[nsfSPEED_NTSC:])
+	copy(n.Bankswitch[:], n.b[nsfBANKSWITCH:nsfSPEED_PAL])
+	n.SpeedPAL = bLEtoUint16(n.b[nsfSPEED_PAL:])
+	n.PALNTSC = n.b[nsfPAL_NTSC]
+	n.Extra = n.b[nsfEXTRA]
+	n.Data = n.b[nsfHEADER_LEN:]
 	if n.SampleRate == 0 {
 		n.SampleRate = DefaultSampleRate
 	}
-	copy(n.Ram.M[n.LoadAddr:], n.Data)
+	copy(n.ram.M[n.LoadAddr:], n.Data)
 	return
 }
 
 type NSF struct {
-	*Ram
+	*ram
 	*cpu6502.Cpu
 
 	b []byte // raw NSF data
@@ -111,9 +111,9 @@ type NSF struct {
 
 func New() *NSF {
 	n := NSF{
-		Ram: new(Ram),
+		ram: new(ram),
 	}
-	n.Cpu = cpu6502.New(n.Ram)
+	n.Cpu = cpu6502.New(n.ram)
 	n.Cpu.T = &n
 	n.Cpu.DisableDecimal = true
 	n.Cpu.P = 0x24
@@ -122,17 +122,17 @@ func New() *NSF {
 }
 
 func (n *NSF) Tick() {
-	n.Ram.A.Step()
+	n.ram.A.Step()
 	n.totalTicks++
 	n.frameTicks++
 	if n.frameTicks == cpuClock/240 {
 		n.frameTicks = 0
-		n.Ram.A.FrameStep()
+		n.ram.A.FrameStep()
 	}
 	n.sampleTicks++
 	if n.SampleRate > 0 && n.sampleTicks >= cpuClock/n.SampleRate {
 		n.sampleTicks = 0
-		n.append(n.Ram.A.Volume())
+		n.append(n.ram.A.Volume())
 	}
 	n.playTicks++
 }
@@ -152,7 +152,7 @@ func (n *NSF) append(v float32) {
 }
 
 func (n *NSF) Init(song int) {
-	n.Ram.A.Init()
+	n.ram.A.Init()
 	n.Cpu.A = byte(song - 1)
 	n.Cpu.PC = n.InitAddr
 	n.Cpu.T = nil
@@ -162,7 +162,7 @@ func (n *NSF) Init(song int) {
 
 func (n *NSF) Step() {
 	n.Cpu.Step()
-	if !n.Cpu.I() && n.Ram.A.Interrupt {
+	if !n.Cpu.I() && n.ram.A.Interrupt {
 		n.Cpu.Interrupt()
 	}
 }
@@ -200,12 +200,12 @@ func bToString(b []byte) string {
 	return string(b[:i])
 }
 
-type Ram struct {
+type ram struct {
 	M [0xffff + 1]byte
-	A Apu
+	A apu
 }
 
-func (r *Ram) Read(v uint16) byte {
+func (r *ram) Read(v uint16) byte {
 	switch v {
 	case 0x4015:
 		return r.A.Read(v)
@@ -214,7 +214,7 @@ func (r *Ram) Read(v uint16) byte {
 	}
 }
 
-func (r *Ram) Write(v uint16, b byte) {
+func (r *ram) Write(v uint16, b byte) {
 	r.M[v] = b
 	if v&0xf000 == 0x4000 {
 		r.A.Write(v, b)

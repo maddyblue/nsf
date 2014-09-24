@@ -35,7 +35,7 @@ Loop:
 			if a > 0xffff {
 				break Loop
 			}
-			copy(n.Ram.M[a:a+0x4000], n.Data[i*0x4000:(i+1)*0x4000])
+			copy(n.ram.M[a:a+0x4000], n.Data[i*0x4000:(i+1)*0x4000])
 		}
 	}
 	n.Cpu.Reset()
