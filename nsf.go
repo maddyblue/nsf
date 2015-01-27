@@ -78,6 +78,17 @@ type NSF struct {
 
 	b []byte // raw NSF data
 
+	// Silence is the duration for which if the result of Play is silence,
+	// Play will halt. Defaults to 1s. Set to 0 to disable silence check.
+	Silence time.Duration
+	// Limit is the duration after which Play will halt. Defaults to 2m. Set to
+	// 0 to play indefinitely.
+	Limit time.Duration
+
+	silent time.Duration
+	played time.Duration
+	zero   bool
+
 	Version byte
 	Songs   byte
 	Start   byte
@@ -111,6 +122,9 @@ type NSF struct {
 
 func New() *NSF {
 	n := NSF{
+		Silence: time.Second,
+		Limit:   time.Minute * 2,
+
 		ram: new(ram),
 	}
 	n.Cpu = cpu6502.New(n.ram)
@@ -138,6 +152,9 @@ func (n *NSF) Tick() {
 }
 
 func (n *NSF) append(v float32) {
+	if v != 0 {
+		n.zero = false
+	}
 	n.prevs[n.pi] = v
 	n.pi++
 	if n.pi >= len(n.prevs) {
@@ -167,10 +184,18 @@ func (n *NSF) Step() {
 	}
 }
 
+// Play returns the requested number of samples. If less are returned,
+// the silence check or time limit have been reached.
 func (n *NSF) Play(samples int) []float32 {
 	playDur := time.Duration(n.SpeedNTSC) * time.Nanosecond * 1000
+	sampleDur := time.Duration(samples) * time.Second / time.Duration(n.SampleRate)
+	n.played += sampleDur
+	if n.Limit > 0 && n.played > n.Limit {
+		return nil
+	}
 	ticksPerPlay := int64(playDur / (time.Second / cpuClock))
 	n.samples = make([]float32, 0, samples)
+	n.zero = true
 	for len(n.samples) < samples {
 		n.playTicks = 0
 		n.Cpu.PC = n.PlayAddr
@@ -180,6 +205,14 @@ func (n *NSF) Play(samples int) []float32 {
 		for i := ticksPerPlay - n.playTicks; i > 0 && len(n.samples) < samples; i-- {
 			n.Tick()
 		}
+	}
+	if n.zero {
+		n.silent += sampleDur
+		if n.Silence > 0 && n.silent > n.Silence {
+			return nil
+		}
+	} else {
+		n.silent = 0
 	}
 	return n.samples
 }
