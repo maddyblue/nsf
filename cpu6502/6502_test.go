@@ -39,7 +39,7 @@ func TestFunctional(t *testing.T) {
 	c.L = make([]Log, 20)
 	c.PC = 0x0400
 	i := 0
-	for !c.Halt {
+	for {
 		if c.PC == 0x3399 {
 			break
 		}
