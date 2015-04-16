@@ -13,21 +13,23 @@ import (
 
 func loadNES(fname string) *NSF {
 	var err error
-	n := New()
-	n.b, err = ioutil.ReadFile(fname)
+	var n NSF
+	b, err := ioutil.ReadFile(fname)
 	if err != nil {
 		panic(err)
 	}
-	if string(n.b[:4]) != "NES\u001a" {
+	if string(b[:4]) != "NES\u001a" {
 		panic("not a NES file")
 	}
-	prg := n.b[4]
+	prg := b[4]
 	//chr := n.b[5]
-	n.Data = n.b[16:]
-	mapper := n.b[6]>>4 | n.b[7]&0xF0
+	n.Data = b[16:]
+	mapper := b[6]>>4 | b[7]&0xF0
 	if mapper != 0 {
 		panic("unknown mapper")
 	}
+	n.ram = new(ram)
+	n.Cpu = cpu6502.New(n.ram)
 Loop:
 	for a := 0x4000; true; {
 		for i := 0; i < int(prg); i++ {
@@ -42,7 +44,7 @@ Loop:
 	if n.Cpu.PC == 0 {
 		panic("PC == 0")
 	}
-	return n
+	return &n
 }
 
 func TestNesTest(t *testing.T) {
@@ -72,7 +74,7 @@ func TestNesTest(t *testing.T) {
 		if l[0:4] != fmt.Sprintf("%04X", n.Cpu.PC) {
 			t.Fatal("bad pc")
 		}
-		if l[6:8] != fmt.Sprintf("%02X", n.Read(n.Cpu.PC)) {
+		if l[6:8] != fmt.Sprintf("%02X", n.ram.Read(n.Cpu.PC)) {
 			t.Fatal("bad i")
 		}
 		if l[50:52] != fmt.Sprintf("%02X", n.Cpu.A) {
