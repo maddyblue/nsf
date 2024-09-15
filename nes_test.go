@@ -3,18 +3,17 @@ package nsf
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/mjibson/nsf/cpu6502"
+	"github.com/maddyblue/nsf/cpu6502"
 )
 
 func loadNES(fname string) *NSF {
 	var err error
 	var n NSF
-	b, err := ioutil.ReadFile(fname)
+	b, err := os.ReadFile(fname)
 	if err != nil {
 		panic(err)
 	}
@@ -87,7 +86,7 @@ func TestNesTest(t *testing.T) {
 			t.Fatal("bad y")
 		}
 		if l[65:67] != fmt.Sprintf("%02X", n.Cpu.P) {
-			t.Fatal("bad p")
+			t.Fatalf("bad p, want %s, got %02X", l[65:67], n.Cpu.P)
 		}
 		if l[71:73] != fmt.Sprintf("%02X", n.Cpu.S) {
 			t.Fatal("bad s")

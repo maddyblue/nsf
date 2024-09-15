@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Matt Jibson <matt.jibson@gmail.com>
+ * Copyright (c) 2014 Maddy Blue <github@maddy.blue>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -127,13 +127,13 @@ type Cpu struct {
 }
 
 func (c *Cpu) StringLog() string {
-	s := ""
+	var s strings.Builder
 	o := c.LI
 	for i := range c.L {
 		li := (i + o) % len(c.L)
-		s += fmt.Sprintf("\n%v", c.L[li])
+		fmt.Fprintf(&s, "\n%v", c.L[li])
 	}
-	return s
+	return s.String()
 }
 
 type Register struct {
@@ -151,7 +151,10 @@ type Log struct {
 }
 
 func (l Log) String() string {
-	m := l.O.Mode.Format()
+	m := ""
+	if l.O != nil {
+		m = l.O.Mode.Format()
+	}
 	if m != "" {
 		m = fmt.Sprintf(m, l.B, l.V, l.T)
 	}
@@ -161,8 +164,9 @@ func (l Log) String() string {
 func New(m Memory) *Cpu {
 	c := Cpu{
 		Register: Register{
-			S: 0xff,
-			P: P_B | P_X | P_I,
+			// nestest seems to expect P_B is unset and S is fd, not ff. Is that correct?
+			S: 0xfd,
+			P: P_X | P_I,
 		},
 		M: m,
 	}

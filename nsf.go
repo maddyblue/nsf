@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 	"time"
 )
@@ -29,7 +28,7 @@ const (
 )
 
 func New(r io.Reader) (*NSF, error) {
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
@@ -133,9 +132,9 @@ func ReadNSFE(b []byte) (*NSF, error) {
 				n.Songs[i].Name = s
 			}
 		case "plst", "text":
-			break
+			// ignored
 		default:
-			panic(id)
+			// unknown
 		}
 	}
 	return &n, nil

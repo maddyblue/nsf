@@ -1,9 +1,11 @@
 package nsf
 
 import (
+	"bytes"
+	"encoding/binary"
 	"time"
 
-	"github.com/mjibson/nsf/cpu6502"
+	"github.com/maddyblue/nsf/cpu6502"
 )
 
 const (
@@ -63,6 +65,9 @@ type NSF struct {
 	samples     []float32
 	prevs       [4]float32
 	pi          int // prevs index
+
+	// Used by Read() to buffer decoded samples.
+	buf bytes.Buffer
 
 	silent time.Duration
 	played time.Duration
@@ -165,6 +170,23 @@ func (n *NSF) Play(samples int) []float32 {
 		n.silent = 0
 	}
 	return n.samples
+}
+
+func (nsf *NSF) Read(p []byte) (n int, err error) {
+	// if readbuf has < p bytes, fill up read buf
+	for nsf.buf.Len() < len(p) {
+		desired := len(p) / 4
+		samples := nsf.Play(desired)
+		if err := binary.Write(&nsf.buf, binary.LittleEndian, samples); err != nil {
+			return 0, err
+		}
+		if len(samples) < desired {
+			break
+		}
+	}
+	// drain readbuf into p
+	n, err = nsf.buf.Read(p)
+	return n, err
 }
 
 // little-endian [2]byte to uint16 conversion

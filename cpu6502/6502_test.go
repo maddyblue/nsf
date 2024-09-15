@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Matt Jibson <matt.jibson@gmail.com>
+ * Copyright (c) 2014 Maddy Blue <github@maddy.blue>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above

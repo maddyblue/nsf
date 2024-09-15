@@ -4,4 +4,4 @@ Nintendo Sound Format for Go
 
 # docs
 
-http://godoc.org/github.com/mjibson/nsf
+https://pkg.go.dev/github.com/maddyblue/nsf
