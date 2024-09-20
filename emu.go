@@ -3,6 +3,8 @@ package nsf
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/maddyblue/nsf/cpu6502"
@@ -10,7 +12,7 @@ import (
 
 const (
 	// 1.79 MHz
-	cpuClock = 236250000 / 11 / 12
+	CpuClock = 236250000 / 11 / 12
 )
 
 var (
@@ -74,20 +76,63 @@ type NSF struct {
 	zero   bool
 	// song is the currently playing song.
 	song Song
+
+	trackApuState *ApuState
+}
+
+// ApuState holds sets of the observed APU channels whenever a sample is written. The bool values
+// are always true, emulating a Set.
+type ApuState struct {
+	S1       map[SquareControls]bool
+	S2       map[SquareControls]bool
+	Triangle map[TriangeControls]bool
+	Noise    map[NoiseControls]bool
+}
+
+// Enable APU state tracking. Must be called prior to Init. Persisted between calls to Init. So if
+// you want unique sets per track, re-call this function before each call to Init.
+func (n *NSF) TrackApuState() *ApuState {
+	n.trackApuState = &ApuState{
+		S1:       make(map[SquareControls]bool),
+		S2:       make(map[SquareControls]bool),
+		Triangle: make(map[TriangeControls]bool),
+		Noise:    make(map[NoiseControls]bool),
+	}
+	return n.trackApuState
 }
 
 func (n *NSF) Tick() {
 	n.ram.A.Step()
 	n.totalTicks++
 	n.frameTicks++
-	if n.frameTicks == cpuClock/240 {
+	if n.frameTicks == CpuClock/240 {
 		n.frameTicks = 0
 		n.ram.A.FrameStep()
 	}
 	n.sampleTicks++
-	if n.SampleRate > 0 && n.sampleTicks >= cpuClock/n.SampleRate {
+	if n.SampleRate > 0 && n.sampleTicks >= CpuClock/n.SampleRate {
 		n.sampleTicks = 0
 		n.append(n.ram.A.Volume())
+		// Add current APU state to the tracker sets if tracking and the APU has had a state change.
+		if n.trackApuState != nil && n.ram.A.Written {
+			c := &n.ram.A.Controls
+			if c.Disable&0x1 != 0 {
+				n.trackApuState.S1[c.S1] = true
+			}
+			if c.Disable&0x2 != 0 {
+				n.trackApuState.S2[c.S2] = true
+			}
+			if c.Disable&0x4 != 0 {
+				n.trackApuState.Triangle[c.T] = true
+			}
+			if c.Disable&0x8 != 0 {
+				n.trackApuState.Noise[c.N] = true
+			}
+			if len(n.trackApuState.S1)%10 == 0 {
+				fmt.Println("S1 len", len(n.trackApuState.S1))
+			}
+			n.ram.A.Written = false
+		}
 	}
 	n.playTicks++
 }
@@ -139,8 +184,11 @@ func (n *NSF) step() {
 	}
 }
 
-// Play returns the requested number of samples. If less are returned,
-// the silence check or time limit have been reached.
+// Play returns the requested number of samples. If less are returned, the silence check or time
+// limit have been reached.
+//
+// TODO: Figure out why samples must be >= 16 for this to return something useful. At <16 it returns
+// all zeros.
 func (n *NSF) Play(samples int) []float32 {
 	playDur := time.Duration(n.SpeedNTSC) * time.Nanosecond * 1000
 	sampleDur := time.Duration(samples) * time.Second / time.Duration(n.SampleRate)
@@ -148,8 +196,12 @@ func (n *NSF) Play(samples int) []float32 {
 	if n.song.Duration > 0 && n.played > n.song.Duration {
 		return nil
 	}
-	ticksPerPlay := int64(playDur / (time.Second / cpuClock))
-	n.samples = make([]float32, 0, samples)
+	ticksPerPlay := int64(playDur / (time.Second / CpuClock))
+	allocSamples := samples
+	if allocSamples > 1<<10 {
+		allocSamples = 1 << 10
+	}
+	n.samples = make([]float32, 0, allocSamples)
 	n.zero = true
 	for len(n.samples) < samples {
 		n.playTicks = 0
@@ -206,8 +258,9 @@ func bToString(b []byte) string {
 }
 
 type ram struct {
-	M [0xffff + 1]byte
-	A apu
+	M       [0xffff + 1]byte
+	A       Apu
+	written *atomic.Bool
 }
 
 func (r *ram) Read(v uint16) byte {
@@ -223,5 +276,8 @@ func (r *ram) Write(v uint16, b byte) {
 	r.M[v] = b
 	if v&0xf000 == 0x4000 {
 		r.A.Write(v, b)
+		if r.written != nil {
+			r.written.Store(true)
+		}
 	}
 }

@@ -164,7 +164,6 @@ func (l Log) String() string {
 func New(m Memory) *Cpu {
 	c := Cpu{
 		Register: Register{
-			// nestest seems to expect P_B is unset and S is fd, not ff. Is that correct?
 			S: 0xfd,
 			P: P_X | P_I,
 		},

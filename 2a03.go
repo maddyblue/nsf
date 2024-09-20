@@ -1,6 +1,6 @@
 package nsf
 
-type apu struct {
+type Apu struct {
 	S1, S2 square
 	triangle
 	noise
@@ -10,6 +10,39 @@ type apu struct {
 	FT         byte
 	IrqDisable bool
 	Interrupt  bool
+
+	Controls ApuControls
+	// Set to true when a control is written.
+	Written bool
+}
+
+type ApuControls struct {
+	S1, S2  SquareControls
+	T       TriangeControls
+	N       NoiseControls
+	Disable byte
+	FI      byte
+}
+
+type NoiseControls struct {
+	Envelope byte
+	Timer    byte
+	Length   byte
+}
+
+type TriangeControls struct {
+	LL    byte
+	Timer TimerControls
+}
+
+type SquareControls struct {
+	EDL   byte
+	Sweep byte
+	Timer TimerControls
+}
+
+type TimerControls struct {
+	Hi, Lo byte
 }
 
 type noise struct {
@@ -82,7 +115,7 @@ type length struct {
 	Counter byte
 }
 
-func (a *apu) Init() {
+func (a *Apu) Init() {
 	a.S1.sweep.NegOffset = -1
 	for i := uint16(0x4000); i <= 0x400f; i++ {
 		a.Write(i, 0)
@@ -96,41 +129,57 @@ func (a *apu) Init() {
 	a.noise.Shift = 1
 }
 
-func (a *apu) Write(v uint16, b byte) {
+func (a *Apu) Write(v uint16, b byte) {
+	a.Written = true
 	switch v & 0xff {
 	case 0x00:
 		a.S1.Control1(b)
+		a.Controls.S1.EDL = b
 	case 0x01:
 		a.S1.Control2(b)
+		a.Controls.S1.Sweep = b
 	case 0x02:
 		a.S1.Control3(b)
+		a.Controls.S1.Timer.Lo = b
 	case 0x03:
 		a.S1.Control4(b)
+		a.Controls.S1.Timer.Hi = b
 	case 0x04:
 		a.S2.Control1(b)
+		a.Controls.S2.EDL = b
 	case 0x05:
 		a.S2.Control2(b)
+		a.Controls.S2.Sweep = b
 	case 0x06:
 		a.S2.Control3(b)
+		a.Controls.S2.Timer.Lo = b
 	case 0x07:
 		a.S2.Control4(b)
+		a.Controls.S2.Timer.Hi = b
 	case 0x08:
 		a.triangle.Control1(b)
+		a.Controls.T.LL = b
 	case 0x0a:
 		a.triangle.Control2(b)
+		a.Controls.T.Timer.Lo = b
 	case 0x0b:
 		a.triangle.Control3(b)
+		a.Controls.T.Timer.Hi = b
 	case 0x0c:
 		a.noise.Control1(b)
+		a.Controls.N.Envelope = b
 	case 0x0e:
 		a.noise.Control2(b)
+		a.Controls.N.Timer = b
 	case 0x0f:
 		a.noise.Control3(b)
+		a.Controls.N.Length = b
 	case 0x15:
 		a.S1.Disable(b&0x1 == 0)
 		a.S2.Disable(b&0x2 == 0)
 		a.triangle.Disable(b&0x4 == 0)
 		a.noise.Disable(b&0x8 == 0)
+		a.Controls.Disable = b
 	case 0x17:
 		a.FT = 0
 		if b&0x80 != 0 {
@@ -143,6 +192,7 @@ func (a *apu) Write(v uint16, b byte) {
 		if a.IrqDisable && a.Interrupt {
 			a.Interrupt = false
 		}
+		a.Controls.FI = b
 	}
 }
 
@@ -252,7 +302,7 @@ func (n *noise) Disable(b bool) {
 	}
 }
 
-func (a *apu) Read(v uint16) byte {
+func (a *Apu) Read(v uint16) byte {
 	var b byte
 	if v == 0x4015 {
 		if a.S1.length.Counter > 0 {
@@ -355,7 +405,7 @@ func (n *noise) Clock() {
 	}
 }
 
-func (a *apu) Step() {
+func (a *Apu) Step() {
 	if a.Odd {
 		if a.S1.Enable {
 			a.S1.Clock()
@@ -373,7 +423,7 @@ func (a *apu) Step() {
 	}
 }
 
-func (a *apu) FrameStep() {
+func (a *Apu) FrameStep() {
 	a.FT++
 	if a.FT == a.FC {
 		a.FT = 0
@@ -422,7 +472,7 @@ func (l *length) Clock() {
 	}
 }
 
-func (a *apu) Volume() float32 {
+func (a *Apu) Volume() float32 {
 	p := pulseOut[a.S1.Volume()+a.S2.Volume()]
 	t := tndOut[3*a.triangle.Volume()+2*a.noise.Volume()]
 	return p + t

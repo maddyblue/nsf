@@ -3,6 +3,7 @@ package nsf
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -93,4 +94,46 @@ func TestNesTest(t *testing.T) {
 		}
 		n.Cpu.Step()
 	}
+}
+
+func TestApuChanges(t *testing.T) {
+	f, err := os.Open("mm3.nsf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := New(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.TrackApuState()
+	n.Init(10)
+	fmt.Println("playing")
+	n.Play(math.MaxInt)
+	fmt.Println("played")
+
+	/*
+		a := n.ram.A.Controls()
+		as := fmt.Sprintf("%v", a)
+		_ = as
+		fmt.Println(a)
+		changes := 0
+		for si := 0; ; si++ {
+			samples := n.Play(16)
+			if len(samples) == 0 {
+				return
+			}
+			//fmt.Println(samples)
+			na := n.ram.A.Controls()
+			nas := fmt.Sprintf("%v", na)
+			_ = nas
+			if na != a {
+				fmt.Printf("A changed at idx %03d: %s\n", si, nas)
+				a = na
+				changes++
+				if changes > 1 {
+					//return
+				}
+			}
+		}
+	*/
 }

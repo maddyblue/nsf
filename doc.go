@@ -1,4 +1,4 @@
 /*
-Package nsf provides reading and emulating of Nintendo NSF sound files.
+Package nsf provides reading and emulating of Nintendo sound files (NSF).
 */
 package nsf

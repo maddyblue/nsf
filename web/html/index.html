@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --font-family: sans-serif;
+
+        --color-primary: hsl(190, 97%, 38%);
+        --color-primary-focus: hsl(190, 97%, 30%);
+        --color-link: hsl(210, 66%, 52%);
+        --color-link-focus: hsl(210, 66%, 47%);
+        --color-background: hsl(0, 0%, 10%);
+        --color-gray-1: hsl(0, 0%, 85%);
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --color-primary: hsl(190, 97%, 30%);
+          --color-primary-focus: hsl(190, 97%, 38%);
+          --color-link: hsl(210, 66%, 47%);
+          --color-link-focus: hsl(210, 66%, 52%);
+          --color-background: hsl(0, 0%, 100%);
+          --color-gray-1: hsl(0, 0%, 15%);
+        }
+      }
+
+      body {
+        margin: 0 auto;
+        background-color: var(--color-background);
+        font-family: var(--font-family);
+        font-size: 1.1rem;
+        color: var(--color-gray-1);
+        line-height: 1.4;
+        max-width: 62.5rem;
+      }
+      a {
+        text-decoration: none;
+        color: var(--color-link);
+      }
+      a:focus,
+      a:hover {
+        color: var(--color-link-focus);
+      }
+      a:visited {
+        color: var(--color-primary);
+      }
+      a:visited:hover {
+        color: var(--color-primary-focus);
+      }
+      img {
+        max-width: 100%;
+      }
+      footer {
+        margin-top: 2rem;
+      }
+    </style>
+    <title>nsf sampler</title>
+  </head>
+  <body>
+    <button id="replay">replay</button>
+    <button id="stop">stop</button>
+    <form id="form" onwheel>
+      <fieldset>
+        <legend>pulse 1</legend>
+        <fieldset>
+          <legend>envelope</legend>
+          <div>
+            <label
+              >duty:
+              <input type="number" min="0" max="3" value="1" id="p1-env-duty"
+            /></label>
+          </div>
+          <div>
+            <label
+              >loop: <input type="checkbox" id="p1-env-loop" checked
+            /></label>
+          </div>
+          <div>
+            <label
+              >constant volume:
+              <input type="checkbox" id="p1-env-constant-volume"
+            /></label>
+          </div>
+          <div>
+            <label
+              >volume:
+              <input
+                type="number"
+                min="0"
+                max="15"
+                value="10"
+                id="p1-env-volume"
+            /></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>sweep</legend>
+          <div>
+            <label
+              >enable: <input type="checkbox" id="p1-sweep-enable"
+            /></label>
+          </div>
+          <div>
+            <label
+              >period:
+              <input
+                type="number"
+                min="0"
+                max="7"
+                value="7"
+                id="p1-sweep-period"
+            /></label>
+          </div>
+          <div>
+            <label
+              >shift:
+              <input
+                type="number"
+                min="0"
+                max="7"
+                value="0"
+                id="p1-sweep-shift"
+            /></label>
+          </div>
+          <div>
+            <label
+              >negate: <input type="checkbox" id="p1-sweep-negate"
+            /></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>timer</legend>
+          <div>
+            <label
+              >length:
+              <input
+                type="number"
+                min="0"
+                max="2047"
+                value="250"
+                id="p1-timer-length"
+            /></label>
+          </div>
+          <div>
+            <label
+              >counter:
+              <input
+                type="number"
+                min="0"
+                max="31"
+                value="10"
+                id="p1-timer-counter"
+            /></label>
+          </div>
+        </fieldset>
+      </fieldset>
+    </form>
+
+    <script>
+      const form = document.getElementById("form");
+      document.getElementById("replay").addEventListener("click", formChanged);
+      form.addEventListener("change", formChanged);
+      form.addEventListener("wheel", formChanged);
+      function formChanged() {
+        const data = {};
+        Object.assign(data, getPulse("p1"));
+        fetchAudio(data);
+      }
+      document.getElementById("stop").addEventListener("click", () => {
+        context.close();
+      });
+
+      async function fetchAudio(data) {
+        const url = "/api/generate";
+        try {
+          const resp = await fetch(url, {
+            method: "POST",
+            body: JSON.stringify(data),
+          });
+          if (!resp.ok) {
+            console.error(resp.status);
+            return;
+          }
+          const samples = await resp.json();
+          if (samples.length < 1) {
+            return;
+          }
+
+          context.close();
+          context = new AudioContext();
+          playSound(samples);
+        } catch (err) {
+          console.error(err.message);
+        }
+      }
+
+      let context = new AudioContext();
+      function playSound(arr) {
+        var buf = new Float32Array(arr.length);
+        for (var i = 0; i < arr.length; i++) buf[i] = arr[i];
+        var buffer = context.createBuffer(1, buf.length, context.sampleRate);
+        buffer.copyToChannel(buf, 0);
+        var source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        source.start(0);
+      }
+
+      function getPulse(idx) {
+        const data = {};
+        const prefix = idx + "-";
+        // Integers.
+        for (name of [
+          "env-duty",
+          "env-volume",
+          "sweep-period",
+          "sweep-shift",
+          "timer-length",
+          "timer-counter",
+        ]) {
+          data[prefix + name] = parseInt(
+            document.getElementById(prefix + name).value
+          );
+        }
+        // Booleans.
+        for (name of [
+          "env-loop",
+          "env-constant-volume",
+          "sweep-enable",
+          "sweep-negate",
+        ]) {
+          data[prefix + name] = document.getElementById(prefix + name).checked;
+        }
+        return data;
+      }
+    </script>
+  </body>
+</html>
