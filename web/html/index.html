@@ -157,8 +157,28 @@
       </fieldset>
     </form>
 
+    <button id="extract">extract</button>
+    <div id="extracted" style="font-size: 50%"></div>
+
     <script>
       const form = document.getElementById("form");
+      const extracted = document.getElementById("extracted");
+
+      const Integers = [
+        "env-duty",
+        "env-volume",
+        "sweep-period",
+        "sweep-shift",
+        "timer-length",
+        "timer-counter",
+      ];
+      const Booleans = [
+        "env-loop",
+        "env-constant-volume",
+        "sweep-enable",
+        "sweep-negate",
+      ];
+
       document.getElementById("replay").addEventListener("click", formChanged);
       form.addEventListener("change", formChanged);
       form.addEventListener("wheel", formChanged);
@@ -167,9 +187,57 @@
         Object.assign(data, getPulse("p1"));
         fetchAudio(data);
       }
+      document.getElementById("extract").addEventListener("click", extract);
       document.getElementById("stop").addEventListener("click", () => {
         context.close();
       });
+
+      async function extract(data) {
+        const url = "/api/extract";
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) {
+            console.error(resp.status);
+            return;
+          }
+          const data = await resp.json();
+          const divs = data.map((d, idx) => {
+            const div = document.createElement("div");
+            const text = document.createTextNode(
+              `${idx + 1}: ${JSON.stringify(d)}`
+            );
+            div.appendChild(text);
+            div.addEventListener("click", () => {
+              loadData(d);
+            });
+            return div;
+          });
+          console.debug(divs);
+          extracted.replaceChildren(...divs);
+        } catch (err) {
+          console.error(err.message);
+        }
+      }
+
+      function loadData(data) {
+        function setPulse(idx) {
+          const prefix = idx + "-";
+          for (name of Integers) {
+            let value = data[prefix + name];
+            if (name === "timer-length" && value == 0) {
+              value = 250;
+            }
+            document.getElementById(prefix + name).value = value;
+          }
+          for (name of Booleans) {
+            document.getElementById(prefix + name).checked =
+              data[prefix + name];
+          }
+        }
+
+        setPulse("p1");
+        formChanged();
+      }
 
       async function fetchAudio(data) {
         const url = "/api/generate";
@@ -210,26 +278,12 @@
       function getPulse(idx) {
         const data = {};
         const prefix = idx + "-";
-        // Integers.
-        for (name of [
-          "env-duty",
-          "env-volume",
-          "sweep-period",
-          "sweep-shift",
-          "timer-length",
-          "timer-counter",
-        ]) {
+        for (name of Integers) {
           data[prefix + name] = parseInt(
             document.getElementById(prefix + name).value
           );
         }
-        // Booleans.
-        for (name of [
-          "env-loop",
-          "env-constant-volume",
-          "sweep-enable",
-          "sweep-negate",
-        ]) {
+        for (name of Booleans) {
           data[prefix + name] = document.getElementById(prefix + name).checked;
         }
         return data;

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/maddyblue/nsf"
@@ -35,18 +36,77 @@ func main() {
 	}
 
 	http.Handle("/", http.FileServer(httpfs))
-	http.HandleFunc("/api/generate", Generate)
+	http.Handle("/api/generate", apiJsonHandler(Generate))
+	http.Handle("/api/extract", apiJsonHandler(Extract))
 
 	fmt.Println("listening on", *flagAddr)
 	log.Fatal(http.ListenAndServe(*flagAddr, nil))
 }
 
-func Generate(w http.ResponseWriter, r *http.Request) {
+// Collects errors and returns gzip'd json.
+func apiJsonHandler(handler func(r *http.Request) (any, error)) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, err := handler(r)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		gw := gzip.NewWriter(w)
+		json.NewEncoder(gw).Encode(data)
+		gw.Close()
+	})
+}
+
+func Extract(r *http.Request) (any, error) {
+	f, err := os.Open("../mm3.nsf")
+	if err != nil {
+		return nil, err
+	}
+	n, err := nsf.New(f)
+	if err != nil {
+		return nil, err
+	}
+	apuState := n.TrackApuState()
+	n.Init(5)
+	const desired = 1000
+	for {
+		samples := n.Play(desired)
+		if len(samples) < desired {
+			break
+		}
+	}
+
+	var controls []GenerateData
+	for s1 := range apuState.S1 {
+		data := GenerateData{
+			Duration: 0,
+
+			P1EnvDuty:           int(s1.EDL & 0b1100_0000 >> 6),
+			P1EnvLoop:           s1.EDL&0b10_0000 != 0,
+			P1EnvConstantVolume: s1.EDL&0b01_0000 != 0,
+			P1EnvVolume:         s1.EnvelopeVolume(),
+
+			P1SweepEnable: s1.Sweep&0b1000_0000 != 0,
+			P1SweepPeriod: int(s1.Sweep & 0b111_0000 >> 4),
+			P1SweepNegate: s1.Sweep&0b0000_1000 != 0,
+			P1SweepShift:  int(s1.Sweep & 0b0111 >> 0),
+
+			P1TimerLength:  0,
+			P1TimerCounter: int(s1.Length),
+		}
+		controls = append(controls, data)
+	}
+	return controls, nil
+}
+
+func Generate(r *http.Request) (any, error) {
 	d := json.NewDecoder(r.Body)
 	var data GenerateData
 	if err := d.Decode(&data); err != nil {
-		http.Error(w, err.Error(), 400)
-		return
+		return nil, err
 	}
 
 	var a nsf.Apu
@@ -113,12 +173,7 @@ func Generate(w http.ResponseWriter, r *http.Request) {
 	}
 	// Trim off start and end silence.
 	vols = vols[firstNonZero:lastNonZero]
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Encoding", "gzip")
-	gw := gzip.NewWriter(w)
-	json.NewEncoder(gw).Encode(vols)
-	gw.Close()
+	return vols, nil
 }
 
 func bool2byte(b bool) byte {

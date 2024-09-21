@@ -3,7 +3,6 @@ package nsf
 import (
 	"bufio"
 	"fmt"
-	"math"
 	"os"
 	"strings"
 	"testing"
@@ -105,11 +104,19 @@ func TestApuChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n.TrackApuState()
+	apuState := n.TrackApuState()
 	n.Init(10)
-	fmt.Println("playing")
-	n.Play(math.MaxInt)
-	fmt.Println("played")
+	const desired = 1000
+	for {
+		samples := n.Play(desired)
+		if len(samples) < desired {
+			break
+		}
+	}
+
+	for s1 := range apuState.S1 {
+		fmt.Printf("%+v\n", s1)
+	}
 
 	/*
 		a := n.ram.A.Controls()

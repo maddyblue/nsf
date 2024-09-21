@@ -3,7 +3,6 @@ package nsf
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -116,7 +115,7 @@ func (n *NSF) Tick() {
 		// Add current APU state to the tracker sets if tracking and the APU has had a state change.
 		if n.trackApuState != nil && n.ram.A.Written {
 			c := &n.ram.A.Controls
-			if c.Disable&0x1 != 0 {
+			if c.Disable&0x1 != 0 && c.S1.EnvelopeVolume() > 0 {
 				n.trackApuState.S1[c.S1] = true
 			}
 			if c.Disable&0x2 != 0 {
@@ -127,9 +126,6 @@ func (n *NSF) Tick() {
 			}
 			if c.Disable&0x8 != 0 {
 				n.trackApuState.Noise[c.N] = true
-			}
-			if len(n.trackApuState.S1)%10 == 0 {
-				fmt.Println("S1 len", len(n.trackApuState.S1))
 			}
 			n.ram.A.Written = false
 		}

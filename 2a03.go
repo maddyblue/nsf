@@ -31,18 +31,18 @@ type NoiseControls struct {
 }
 
 type TriangeControls struct {
-	LL    byte
-	Timer TimerControls
+	LL     byte
+	Length byte
 }
 
 type SquareControls struct {
-	EDL   byte
-	Sweep byte
-	Timer TimerControls
+	EDL    byte
+	Sweep  byte
+	Length byte
 }
 
-type TimerControls struct {
-	Hi, Lo byte
+func (s *SquareControls) EnvelopeVolume() int {
+	return int(s.EDL & 0b1111)
 }
 
 type noise struct {
@@ -130,56 +130,64 @@ func (a *Apu) Init() {
 }
 
 func (a *Apu) Write(v uint16, b byte) {
-	a.Written = true
 	switch v & 0xff {
 	case 0x00:
 		a.S1.Control1(b)
 		a.Controls.S1.EDL = b
+		a.Written = true
 	case 0x01:
 		a.S1.Control2(b)
 		a.Controls.S1.Sweep = b
+		a.Written = true
 	case 0x02:
 		a.S1.Control3(b)
-		a.Controls.S1.Timer.Lo = b
 	case 0x03:
 		a.S1.Control4(b)
-		a.Controls.S1.Timer.Hi = b
+		a.Controls.S1.Length = b >> 3
+		a.Written = true
 	case 0x04:
 		a.S2.Control1(b)
 		a.Controls.S2.EDL = b
+		a.Written = true
 	case 0x05:
 		a.S2.Control2(b)
 		a.Controls.S2.Sweep = b
+		a.Written = true
 	case 0x06:
 		a.S2.Control3(b)
-		a.Controls.S2.Timer.Lo = b
 	case 0x07:
 		a.S2.Control4(b)
-		a.Controls.S2.Timer.Hi = b
+		a.Controls.S2.Length = b >> 3
+		a.Written = true
 	case 0x08:
 		a.triangle.Control1(b)
 		a.Controls.T.LL = b
+		a.Written = true
 	case 0x0a:
 		a.triangle.Control2(b)
-		a.Controls.T.Timer.Lo = b
 	case 0x0b:
 		a.triangle.Control3(b)
-		a.Controls.T.Timer.Hi = b
+		a.Controls.T.Length = b >> 3
+		a.Written = true
 	case 0x0c:
 		a.noise.Control1(b)
 		a.Controls.N.Envelope = b
+		a.Written = true
 	case 0x0e:
 		a.noise.Control2(b)
 		a.Controls.N.Timer = b
+		a.Written = true
 	case 0x0f:
 		a.noise.Control3(b)
 		a.Controls.N.Length = b
+		a.Written = true
 	case 0x15:
 		a.S1.Disable(b&0x1 == 0)
 		a.S2.Disable(b&0x2 == 0)
 		a.triangle.Disable(b&0x4 == 0)
 		a.noise.Disable(b&0x8 == 0)
 		a.Controls.Disable = b
+		a.Written = true
 	case 0x17:
 		a.FT = 0
 		if b&0x80 != 0 {
@@ -193,6 +201,7 @@ func (a *Apu) Write(v uint16, b byte) {
 			a.Interrupt = false
 		}
 		a.Controls.FI = b
+		a.Written = true
 	}
 }
 
