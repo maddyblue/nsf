@@ -93,6 +93,17 @@
                 id="p1-env-volume"
             /></label>
           </div>
+          <div>
+            <label
+              >length:
+              <input
+                type="number"
+                min="0"
+                max="31"
+                value="1"
+                id="p1-env-length"
+            /></label>
+          </div>
         </fieldset>
         <fieldset>
           <legend>sweep</legend>
@@ -159,14 +170,27 @@
 
     <button id="extract">extract</button>
     <div id="extracted" style="font-size: 50%"></div>
+    <div id="canvas"></div>
+
+    <script src="/static/data.js"></script>
 
     <script>
+      const CpuClock = 236250000 / 11 / 12;
       const form = document.getElementById("form");
       const extracted = document.getElementById("extracted");
+      const canvasDiv = document.getElementById("canvas");
+
+      let MaxSeconds = 40;
+      canvas.addEventListener("wheel", (event) => {
+        MaxSeconds += event.deltaY * 0.1;
+        MaxSeconds = Math.max(MaxSeconds, 1);
+        drawChart(TESTDATA);
+      });
 
       const Integers = [
         "env-duty",
         "env-volume",
+        "env-length",
         "sweep-period",
         "sweep-shift",
         "timer-length",
@@ -190,8 +214,13 @@
       document.getElementById("extract").addEventListener("click", extract);
       document.getElementById("stop").addEventListener("click", () => {
         context.close();
+        context = new AudioContext();
       });
 
+      drawChart(TESTDATA);
+
+      // Handler for the extract button. Calls the extract api on an nsf file and populates the page
+      // with its extracted apu configs.
       async function extract(data) {
         const url = "/api/extract";
         try {
@@ -212,13 +241,75 @@
             });
             return div;
           });
-          console.debug(divs);
           extracted.replaceChildren(...divs);
+
+          drawChart(data);
         } catch (err) {
           console.error(err.message);
         }
       }
 
+      function drawChart(data) {
+        // Move earlier samples first.
+        data.sort((a, b) => a.Times[0].Start - b.Times[0].Start);
+
+        const tooltip = document.createElement("div");
+
+        const canvas = document.createElement("canvas");
+        canvas.height = 300;
+        canvas.width = 1000;
+        canvas.style = "cursor: pointer";
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "white";
+
+        // Ignore playback after this many seconds.
+        if (!MaxSeconds) {
+          MaxSeconds = 30;
+        }
+        const maxTotalTicks = CpuClock * MaxSeconds;
+        let totalTicks = 0;
+        for ({ Data, Times } of data) {
+          last = Times[Times.length - 1];
+          totalTicks = Math.max(totalTicks, last.End);
+        }
+        totalTicks = Math.min(maxTotalTicks, totalTicks);
+
+        let idx = 0;
+        const LINEHEIGHT = 15;
+        for ({ Data, Times } of data) {
+          for ({ Start, End } of Times) {
+            if (Start > totalTicks) {
+              continue;
+            }
+            const start = (Start / totalTicks) * canvas.width;
+            const end = (End / totalTicks) * canvas.width;
+            const width = Math.max(end - start, 0);
+            ctx.fillRect(start, idx * LINEHEIGHT, width, LINEHEIGHT);
+          }
+
+          idx++;
+        }
+
+        canvas.addEventListener("click", (event) => {
+          const idx = Math.floor(event.offsetY / LINEHEIGHT);
+          const row = data[idx];
+          if (!row) {
+            return;
+          }
+          loadData(row.Data);
+        });
+        canvas.addEventListener("mousemove", (event) => {
+          const idx = Math.floor(event.offsetY / LINEHEIGHT);
+          const row = data[idx];
+          if (!row) {
+            return;
+          }
+          tooltip.innerText = JSON.stringify(row.Data);
+        });
+        canvasDiv.replaceChildren(canvas, tooltip);
+      }
+
+      // Click handler for apu configs. Loads and plays the apu config.
       function loadData(data) {
         function setPulse(idx) {
           const prefix = idx + "-";
@@ -239,6 +330,7 @@
         formChanged();
       }
 
+      // For the specified apu config, fetches audio data and plays it.
       async function fetchAudio(data) {
         const url = "/api/generate";
         try {

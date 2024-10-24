@@ -76,26 +76,31 @@ type NSF struct {
 	// song is the currently playing song.
 	song Song
 
-	trackApuState *ApuState
+	trackApuState  *ApuState
+	lastChangeTick int64
 }
 
 // ApuState holds sets of the observed APU channels whenever a sample is written. The bool values
 // are always true, emulating a Set.
 type ApuState struct {
-	S1       map[SquareControls]bool
-	S2       map[SquareControls]bool
-	Triangle map[TriangeControls]bool
-	Noise    map[NoiseControls]bool
+	S1       map[SquareControls][]Timerange
+	S2       map[SquareControls][]Timerange
+	Triangle map[TriangeControls][]Timerange
+	Noise    map[NoiseControls][]Timerange
+}
+
+type Timerange struct {
+	Start, End int64
 }
 
 // Enable APU state tracking. Must be called prior to Init. Persisted between calls to Init. So if
 // you want unique sets per track, re-call this function before each call to Init.
 func (n *NSF) TrackApuState() *ApuState {
 	n.trackApuState = &ApuState{
-		S1:       make(map[SquareControls]bool),
-		S2:       make(map[SquareControls]bool),
-		Triangle: make(map[TriangeControls]bool),
-		Noise:    make(map[NoiseControls]bool),
+		S1:       make(map[SquareControls][]Timerange),
+		S2:       make(map[SquareControls][]Timerange),
+		Triangle: make(map[TriangeControls][]Timerange),
+		Noise:    make(map[NoiseControls][]Timerange),
 	}
 	return n.trackApuState
 }
@@ -114,18 +119,25 @@ func (n *NSF) Tick() {
 		n.append(n.ram.A.Volume())
 		// Add current APU state to the tracker sets if tracking and the APU has had a state change.
 		if n.trackApuState != nil && n.ram.A.Written {
-			c := &n.ram.A.Controls
-			if c.Disable&0x1 != 0 && c.S1.EnvelopeVolume() > 0 {
-				n.trackApuState.S1[c.S1] = true
+			// Always reset the time range.
+			time := Timerange{
+				Start: n.lastChangeTick,
+				End:   n.totalTicks,
 			}
-			if c.Disable&0x2 != 0 {
-				n.trackApuState.S2[c.S2] = true
+			n.lastChangeTick = n.totalTicks
+			c := &n.ram.A.Controls
+			// But only record it if there was volume.
+			if c.Disable&0x1 != 0 && c.S1.EnvelopeVolume() > 0 {
+				n.trackApuState.S1[c.S1] = append(n.trackApuState.S1[c.S1], time)
+			}
+			if c.Disable&0x2 != 0 && c.S2.EnvelopeVolume() > 0 {
+				n.trackApuState.S2[c.S2] = append(n.trackApuState.S2[c.S2], time)
 			}
 			if c.Disable&0x4 != 0 {
-				n.trackApuState.Triangle[c.T] = true
+				n.trackApuState.Triangle[c.T] = append(n.trackApuState.Triangle[c.T], time)
 			}
 			if c.Disable&0x8 != 0 {
-				n.trackApuState.Noise[c.N] = true
+				n.trackApuState.Noise[c.N] = append(n.trackApuState.Noise[c.N], time)
 			}
 			n.ram.A.Written = false
 		}

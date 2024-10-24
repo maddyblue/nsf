@@ -15,8 +15,22 @@ import (
 	"github.com/maddyblue/nsf"
 )
 
-//go:embed html/index.html
+//go:embed html static
 var content embed.FS
+
+func contentFS(path string) http.Handler {
+	var httpfs http.FileSystem
+	if *flagDev {
+		httpfs = http.Dir(path)
+	} else {
+		sub, err := fs.Sub(content, path)
+		if err != nil {
+			log.Fatal(err)
+		}
+		httpfs = http.FS(sub)
+	}
+	return http.FileServer(httpfs)
+}
 
 var flagDev = flag.Bool("dev", false, "enables reading web files from disk")
 var flagAddr = flag.String("addr", ":2103", "listen address")
@@ -24,22 +38,12 @@ var flagAddr = flag.String("addr", ":2103", "listen address")
 func main() {
 	flag.Parse()
 
-	var httpfs http.FileSystem
-	if *flagDev {
-		httpfs = http.Dir("html")
-	} else {
-		sub, err := fs.Sub(content, "html")
-		if err != nil {
-			log.Fatal(err)
-		}
-		httpfs = http.FS(sub)
-	}
-
-	http.Handle("/", http.FileServer(httpfs))
+	http.Handle("/", contentFS("html"))
+	http.Handle("/static/", http.StripPrefix("/static", contentFS("static")))
 	http.Handle("/api/generate", apiJsonHandler(Generate))
 	http.Handle("/api/extract", apiJsonHandler(Extract))
 
-	fmt.Println("listening on", *flagAddr)
+	fmt.Printf("listening on http://localhost%s/\n", *flagAddr)
 	log.Fatal(http.ListenAndServe(*flagAddr, nil))
 }
 
@@ -79,8 +83,8 @@ func Extract(r *http.Request) (any, error) {
 		}
 	}
 
-	var controls []GenerateData
-	for s1 := range apuState.S1 {
+	var controls []Generated
+	for s1, times := range apuState.S1 {
 		data := GenerateData{
 			Duration: 0,
 
@@ -97,9 +101,14 @@ func Extract(r *http.Request) (any, error) {
 			P1TimerLength:  0,
 			P1TimerCounter: int(s1.Length),
 		}
-		controls = append(controls, data)
+		controls = append(controls, Generated{Data: data, Times: times})
 	}
 	return controls, nil
+}
+
+type Generated struct {
+	Data  GenerateData
+	Times []nsf.Timerange
 }
 
 func Generate(r *http.Request) (any, error) {
@@ -131,7 +140,7 @@ func Generate(r *http.Request) (any, error) {
 	a.Write(0x02, s1_c3)
 	//LLLL LHHH
 	var s1_c4 byte
-	s1_c4 |= (byte(data.P1TimerLength) & 0b11111) << 3
+	s1_c4 |= (byte(data.P1EnvLength) & 0b11111) << 3
 	s1_c4 |= (byte(data.P1TimerLength>>8) & 0b111) << 0
 	a.Write(0x03, s1_c4)
 
@@ -185,14 +194,15 @@ func bool2byte(b bool) byte {
 
 type GenerateData struct {
 	Duration            time.Duration `json:"duration"`
-	P1EnvDuty           int           `json:"p1-env-duty"`
-	P1EnvVolume         int           `json:"p1-env-volume"`
-	P1SweepPeriod       int           `json:"p1-sweep-period"`
-	P1SweepShift        int           `json:"p1-sweep-shift"`
-	P1TimerLength       int           `json:"p1-timer-length"`
-	P1TimerCounter      int           `json:"p1-timer-counter"`
-	P1EnvLoop           bool          `json:"p1-env-loop"`
 	P1EnvConstantVolume bool          `json:"p1-env-constant-volume"`
+	P1EnvDuty           int           `json:"p1-env-duty"`
+	P1EnvLength         int           `json:"p1-env-length"`
+	P1EnvLoop           bool          `json:"p1-env-loop"`
+	P1EnvVolume         int           `json:"p1-env-volume"`
 	P1SweepEnable       bool          `json:"p1-sweep-enable"`
 	P1SweepNegate       bool          `json:"p1-sweep-negate"`
+	P1SweepPeriod       int           `json:"p1-sweep-period"`
+	P1SweepShift        int           `json:"p1-sweep-shift"`
+	P1TimerCounter      int           `json:"p1-timer-counter"`
+	P1TimerLength       int           `json:"p1-timer-length"`
 }
